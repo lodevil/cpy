@@ -1,2 +1,2 @@
 from .grammar_parser import GrammarSyntaxError
-from .grammar import Grammer
+from .grammar import Grammar

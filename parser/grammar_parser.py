@@ -2,6 +2,8 @@ import tokenize
 from .nfa import NFA
 import six
 
+'''inspired by pypy'''
+
 
 class GrammarSyntaxError(Exception):
     pass
@@ -53,8 +55,8 @@ class GrammarParser(object):
             while self.type == tokenize.NEWLINE:
                 self.next()
             name, start_state, end_state = self.parse_rule()
-            print('got', name)
-            self.dfas[name] = start_state.DFA()
+            dfa = start_state.DFA(end_state)
+            self.dfas[name] = dfa
 
     def parse_rule(self):
         name = self.expect(tokenize.NAME)
