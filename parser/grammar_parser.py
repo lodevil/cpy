@@ -1,6 +1,7 @@
 import tokenize
 from .nfa import NFA
 import six
+from .state import STATE_LABEL, Label, State
 
 '''inspired by pypy'''
 
@@ -17,6 +18,7 @@ class GrammarParser(object):
         self.range = ((0, 0), (0, 0))
         self.line = ''
         self.dfas = {}
+        self.states = {}
         stream = six.StringIO(gramsrc)
         self.tokens = tokenize.generate_tokens(stream.readline)
         self.parse(gramsrc)
@@ -57,6 +59,35 @@ class GrammarParser(object):
             name, start_state, end_state = self.parse_rule()
             dfa = start_state.DFA(end_state)
             self.dfas[name] = dfa
+        for name, dfa in self.dfas.items():
+            self.dfa2state(dfa)
+        for state in self.states.values():
+            state.build_bootstrap()
+        states = {}
+        for name, dfa in self.dfas.items():
+            state = self.states[dfa[0]]
+            state.name = name
+            states[name] = state
+        self.states = states
+
+    def dfa2state(self, dfa):
+        if isinstance(dfa, list):
+            dfa = dfa[0]
+        state = self.states.get(dfa, None)
+        if state is not None:
+            return state
+        state = State(dfa.is_final)
+        self.states[dfa] = state
+        for name, d in dfa.arcs.items():
+            label = Label.get_label(name)
+            if label is None:
+                label = Label(STATE_LABEL,
+                    self.dfa2state(self.dfas[name]))
+            state.arc(label, self.dfa2state(d))
+        return state
+
+    def get_first(self, name):
+        pass
 
     def parse_rule(self):
         name = self.expect(tokenize.NAME)
@@ -92,6 +123,7 @@ class GrammarParser(object):
             self.next()
             start_state, end_state = self.parse_alternatives()
             self.expect(tokenize.OP, ']')
+            start_state.arc(end_state)
         else:
             start_state, end_state = self.parse_atom()
             if self.type == tokenize.OP and self.val in ('*', '+'):

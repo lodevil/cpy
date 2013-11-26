@@ -14,6 +14,9 @@ class DFA(object):
             if state is old:
                 self.arcs[label] = new
 
+    def __hash__(self):
+        return id(self)
+
     def __eq__(self, other):
         if not isinstance(other, DFA):
             # This shouldn't really happen.

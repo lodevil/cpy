@@ -26,24 +26,24 @@ class NFA(object):
     def arc(self, state, label=None):
         self.arcs.append((label, state))
 
-    def find_unlabeled_states(self, into):
+    def epsilon_closure(self, into):
         if self in into:
             return
         into.add(self)
         for label, state in self.arcs:
             if label is None:
-                state.find_unlabeled_states(into)
+                state.epsilon_closure(into)
 
     def DFA(self, end):
         base_nfas = set()
-        self.find_unlabeled_states(base_nfas)
+        self.epsilon_closure(base_nfas)
         state_stack = [DFA(base_nfas, end)]
         for state in state_stack:
             arcs = {}
             for nfa in state.nfas:
                 for label, sub_nfa in nfa.arcs:
                     if label is not None:
-                        sub_nfa.find_unlabeled_states(
+                        sub_nfa.epsilon_closure(
                             arcs.setdefault(label, set()))
             for label, nfa_set in arcs.items():
                 for st in state_stack:
