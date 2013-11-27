@@ -11,11 +11,13 @@ class Tokens(object):
         self.stack = []
 
     def next(self):
-        try:
-            tk = self.stack.pop()
-        except IndexError:
-            tk = next(self.gen)
-        return tk
+        while True:
+            try:
+                tk = self.stack.pop()
+            except IndexError:
+                tk = next(self.gen)
+            if tk[0] != tokenize.NL:
+                return tk
 
     def put(self, t):
         self.stack.append(t)
@@ -37,5 +39,4 @@ class Grammar(object):
 
     def file_check(self, src):
         tks = Tokens(src)
-        #pdb.set_trace()
         return self.states['file_input'].check(tks)
