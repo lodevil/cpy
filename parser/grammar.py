@@ -18,10 +18,6 @@ class Tokens(object):
                 return tk
 
 
-class SyntaxError(Exception):
-    pass
-
-
 class Grammar(object):
     def __init__(self, gramsrc):
         self.states = GrammarParser(gramsrc).states
@@ -58,17 +54,24 @@ class Grammar(object):
                 tree.add_down(Node(arc[0].name, tk.type, tk.string, tk.start))
             else:
                 tree.add(Node(None, tk.type, tk.string, tk.start, tk.end))
-                try:
-                    tokens.next()
-                except StopIteration:
-                    if arc[1].is_final:
-                        stack = stack[:-1]
-                        if stack:
-                            tree.up()
-                        continue
-                    raise SyntaxError('unexpected end',
-                        ('<src>', tk.start[0], tk.start[1], tk.line))
-
+                while True:
+                    try:
+                        tokens.next()
+                    except StopIteration:
+                        if arc[1].is_final:
+                            stack = stack[:-1]
+                            if stack:
+                                tree.up()
+                            break
+                        raise SyntaxError('unexpected end',
+                            ('<src>', tk.start[0], tk.start[1], tk.line))
+                    else:
+                        if tokens.cur.type == tokenize.COMMENT:
+                            tree.add(Node(
+                                None, tokens.cur.type, tokens.cur.string,
+                                tokens.cur.start, tokens.cur.end))
+                        else:
+                            break
         try:
             tokens.next()
             raise SyntaxError('too more tokens: %r', tokens.cur)

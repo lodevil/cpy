@@ -17,6 +17,7 @@ def simplify_dfa(dfa):
                     changed = True
                     break
 
+
 class NFA(object):
     '''NFA state'''
     def __init__(self, is_end=False):

@@ -33,6 +33,14 @@ class Node(object):
             return '<Node %s>' % self.name
         return '<Node @%d(%r)>' % (id(self), self.val)
 
+    def printall(self, indent=''):
+        if self.name is not None:
+            print(indent + '<Node %s>' % self.name)
+        else:
+            print(indent + '<Node (%r)>' % self.val)
+        for sub in self.subs:
+            sub.printall(indent + '  ')
+
 
 class ParseTree(object):
     def __init__(self, name, type, val, start=None, end=None):
