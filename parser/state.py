@@ -66,32 +66,27 @@ class State(object):
         return self.bootstrap
 
     def check(self, tks):
-        try:
-            tk = tks.next()
-        except StopIteration:
-            if self.is_final:
-                return True
-            raise
-
+        tk = tks.cur
         if tk[0] not in self.bootstrap:
             if self.is_final:
-                tks.put(tk)
                 return True
-            print(self, tk, self.bootstrap)
             raise Exception('fail0')
         arc = self.bootstrap[tk[0]].get(tk[1], None) or \
             self.bootstrap[tk[0]].get(None, None)
         if arc is None:
             if self.is_final:
-                tks.put(tk)
                 return True
             raise Exception('fail1')
         if arc[0] is not None:
-            tks.put(tk)
             if not arc[0].check(tks):
                 if self.is_final:
-                    tks.put(tk)
                     return True
                 raise Exception('fail2')
-
+        else:
+            try:
+                tks.next()
+            except StopIteration:
+                if arc[1].is_final:
+                    return True
+                raise
         return arc[1].check(tks)

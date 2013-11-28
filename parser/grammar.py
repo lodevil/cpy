@@ -1,42 +1,78 @@
 from .grammar_parser import GrammarParser
-from collections import defaultdict
+from .state import STATE_LABEL
+from .parse_tree import Node, ParseTree
 import tokenize
-import re
 import six
 
 
 class Tokens(object):
     def __init__(self, src):
         self.gen = tokenize.generate_tokens(six.StringIO(src).readline)
-        self.stack = []
+        self.cur = self.next()
 
     def next(self):
         while True:
-            try:
-                tk = self.stack.pop()
-            except IndexError:
-                tk = next(self.gen)
+            tk = next(self.gen)
             if tk[0] != tokenize.NL:
+                self.cur = tk
                 return tk
 
-    def put(self, t):
-        self.stack.append(t)
 
-
-class GrammarError(Exception):
+class SyntaxError(Exception):
     pass
 
 
 class Grammar(object):
-    op_r = re.compile(tokenize.Operator)
-
     def __init__(self, gramsrc):
         self.states = GrammarParser(gramsrc).states
 
-    def eval_check(self, src):
-        tks = Tokens(src)
-        return self.states['eval_input'].check(tks)
+    def parse(self, src, init='file_input'):
+        tokens = Tokens(src)
+        tree = ParseTree(init, STATE_LABEL, None)
+        stack = [self.states[init]]
 
-    def file_check(self, src):
-        tks = Tokens(src)
-        return self.states['file_input'].check(tks)
+        while stack:
+            state = stack[-1]
+            tk = tokens.cur
+            if tk.type not in state.bootstrap:
+                if state.is_final:
+                    stack = stack[:-1]
+                    if stack:
+                        tree.up()
+                    continue
+                raise SyntaxError('invalid grammar0',
+                    ('<src>', tk.start[0], tk.start[1], tk.line))
+            arc = state.bootstrap[tk.type].get(tk.string, None) or \
+                    state.bootstrap[tk.type].get(None, None)
+            if arc is None:
+                if state.is_final:
+                    stack = stack[:-1]
+                    if stack:
+                        tree.up()
+                    continue
+                raise SyntaxError('invalid grammar1',
+                    ('<src>', tk.start[0], tk.start[1], tk.line))
+            stack[-1] = arc[1]
+            if arc[0] is not None:
+                stack.append(arc[0])
+                tree.add_down(Node(arc[0].name, tk.type, tk.string, tk.start))
+            else:
+                tree.add(Node(None, tk.type, tk.string, tk.start, tk.end))
+                try:
+                    tokens.next()
+                except StopIteration:
+                    if arc[1].is_final:
+                        stack = stack[:-1]
+                        if stack:
+                            tree.up()
+                        continue
+                    raise SyntaxError('unexpected end',
+                        ('<src>', tk.start[0], tk.start[1], tk.line))
+
+        try:
+            tokens.next()
+            raise SyntaxError('too more tokens: %r', tokens.cur)
+        except StopIteration:
+            pass
+
+        return tree
