@@ -1,29 +1,17 @@
-from .grammar_parser import GrammarParser
 from .state import STATE_LABEL
 from .parse_tree import Node, ParseTree
-import tokenize
-import six
-
-
-class Tokens(object):
-    def __init__(self, src):
-        self.gen = tokenize.generate_tokens(six.StringIO(src).readline)
-        self.cur = self.next()
-
-    def next(self):
-        while True:
-            tk = next(self.gen)
-            if tk[0] not in (tokenize.NL, tokenize.COMMENT):
-                self.cur = tk
-                return tk
+from .tokens import Tokens
 
 
 class Grammar(object):
-    def __init__(self, gramsrc):
-        self.states = GrammarParser(gramsrc).states
+    def __init__(self, states, default_state='file_input'):
+        self.states = states
+        self.default_state = default_state
 
-    def parse(self, src, init='file_input'):
+    def parse(self, src, init=None):
         tokens = Tokens(src)
+        if init is None:
+            init = self.default_state
         tree = ParseTree(init, STATE_LABEL, None)
         stack = [self.states[init]]
 

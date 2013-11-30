@@ -53,6 +53,7 @@ class State(object):
         if not hasattr(self, 'bootstrap'):
             self.bootstrap = defaultdict(lambda: {})
             for label, state in self.arcs.items():
+                state.build_bootstrap()
                 if label.type == STATE_LABEL:
                     if label.val == self:
                         continue
