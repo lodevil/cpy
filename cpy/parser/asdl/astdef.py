@@ -31,12 +31,17 @@ class Type(object):
         super_type = self.super_type and self.super_type.name or 'object'
         yield 'class %s(%s):\n' % (self.name, super_type)
         attrs = [attr.name for attr in self.attrs]
-        yield indent + '__slots__ = (%s)\n' % ', '.join(map(repr, attrs))
         if attrs:
-            yield '\n'
+            yield indent
+            if len(attrs) == 1:
+                yield '__slots__ = (%s,)\n\n' % repr(attrs[0])
+            else:
+                yield '__slots__ = (%s)\n\n' % ', '.join(map(repr, attrs))
             yield indent + 'def __init__(self, %s):\n' % ', '.join(attrs)
             for attr in self.attrs:
                 yield indent * 2 + 'self.{0} = {0}\n'.format(attr.name)
+        else:
+            yield indent + '__slots__ = ()\n'
 
 
     def __repr__(self):
