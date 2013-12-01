@@ -1,0 +1,7 @@
+#!/bin/sh
+
+rm -f ./cpy/parser/ast.py
+rm -f ./cpy/parser/pystates.py
+
+./cpy/parser/asdl/astdef.py
+./cpy/parser/pygram_gen/pystates_gen.py
