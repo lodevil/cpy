@@ -1,4 +1,4 @@
-from ..state import Label, State, STATE_LABEL
+from ..grammar.state import Label, State, STATE_LABEL, States
 from tokenize import NAME, OP, NEWLINE, ENDMARKER, ERRORTOKEN
 
 
@@ -71,13 +71,6 @@ asdl.arc(Label(STATE_LABEL, module), asdl1)
 asdl1.arc(Label(NEWLINE), asdl1)
 asdl1.arc(Label(ENDMARKER), asdl2)
 
-attr.build_bootstrap()
-attrs.build_bootstrap()
-item.build_bootstrap()
-stmt.build_bootstrap()
-module.build_bootstrap()
-asdl.build_bootstrap()
-
 
 states = {
     'attr': attr,
@@ -87,3 +80,5 @@ states = {
     'module': module,
     'asdl': asdl,
 }
+states = States(**states)
+states.build_bootstrap()

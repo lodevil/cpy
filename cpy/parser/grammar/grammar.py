@@ -1,6 +1,7 @@
 from .state import STATE_LABEL
 from .parse_tree import Node, ParseTree
 from .tokens import Tokens
+import pdb
 
 
 class Grammar(object):
@@ -37,7 +38,6 @@ class Grammar(object):
                     continue
                 raise SyntaxError('invalid grammar1',
                     ('<src>', tk.start[0], tk.start[1], tk.line))
-
             #process arc
             stack[-1] = arc[1]
             if arc[0] is not None:

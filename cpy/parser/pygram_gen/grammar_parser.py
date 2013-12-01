@@ -1,7 +1,8 @@
 import tokenize
-from .nfa import NFA
+from ..grammar.nfa import NFA
 import six
-from .state import STATE_LABEL, Label, State
+from ..grammar.state import STATE_LABEL, Label, State, States
+from collections import OrderedDict
 
 '''inspired by pypy'''
 
@@ -17,7 +18,7 @@ class GrammarParser(object):
         self.val = ''
         self.range = ((0, 0), (0, 0))
         self.line = ''
-        self.dfas = {}
+        self.dfas = OrderedDict()
         self.states = {}
         stream = six.StringIO(gramsrc)
         self.tokens = tokenize.generate_tokens(stream.readline)
@@ -59,7 +60,7 @@ class GrammarParser(object):
             name, start_state, end_state = self.parse_rule()
             dfa = start_state.DFA(end_state)
             self.dfas[name] = dfa
-        for name, dfa in self.dfas.items():
+        '''for name, dfa in self.dfas.items():
             self.dfa2state(dfa)
         for state in self.states.values():
             state.build_bootstrap()
@@ -67,8 +68,10 @@ class GrammarParser(object):
         for name, dfa in self.dfas.items():
             state = self.states[dfa[0]]
             state.name = name
-            states[name] = state
-        self.states = states
+            states[name] = state'''
+        self.states = States()
+        self.states.from_dfas(self.dfas)
+        self.states.build_bootstrap()
 
     def dfa2state(self, dfa):
         if isinstance(dfa, list):
