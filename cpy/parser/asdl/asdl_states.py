@@ -1,8 +1,9 @@
 from ..grammar.state import Label, State, STATE_LABEL, States
+from ..grammar.symbols import Symbols
 from tokenize import NAME, OP, NEWLINE, ENDMARKER, ERRORTOKEN
 
 
-class _Symbols(object):
+class _Symbols(Symbols):
     attr = 257
     attrs = 258
     item = 259

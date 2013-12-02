@@ -13,7 +13,7 @@ if __name__ == '__main__':
     exit(0)
 
 
-from .asdl_states import states
+from .asdl_states import states, symbols
 from ..grammar import Grammar
 from collections import OrderedDict
 import six
@@ -64,7 +64,7 @@ class Attribute(object):
 
 class ASTDef(object):
     def __init__(self, asdlsrc):
-        grammar = Grammar(states, 'asdl')
+        grammar = Grammar(symbols, states, 'asdl')
         self.tree = grammar.parse(asdlsrc)
         self.build()
 
@@ -78,12 +78,12 @@ class ASTDef(object):
 
     def stmt_nodes(self):
         for module in self.tree.entry.subs:
-            if module.name == 'module' and module.subs[1].val == 'Python':
+            if module.type == symbols.module and module.subs[1].val == 'Python':
                 break
         else:
             raise Exception('missing Python module')
         for node in module.subs[2:]:
-            if node.name == 'stmt':
+            if node.type == symbols.stmt:
                 yield node
 
     def build(self):
@@ -113,7 +113,7 @@ class ASTDef(object):
     @staticmethod
     def item_nodes(stmt_node):
         for node in stmt_node.subs[2:]:
-            if node.name == 'item':
+            if node.type == symbols.item:
                 yield node
 
     def build_named_item(self, super_type, item_node):
@@ -126,7 +126,7 @@ class ASTDef(object):
 
     def attrs(self, attrs_node):
         for node in attrs_node.subs[1:]:
-            if node.name == 'attr':
+            if node.type == symbols.attr:
                 yield self.build_attr(node)
 
     @staticmethod

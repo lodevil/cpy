@@ -1,11 +1,10 @@
-from .state import STATE_LABEL
 from .parse_tree import Node, ParseTree
 from .tokens import Tokens
-import pdb
 
 
 class Grammar(object):
-    def __init__(self, states, default_state='file_input'):
+    def __init__(self, symbols, states, default_state='file_input'):
+        self.symbols = symbols
         self.states = states
         self.default_state = default_state
 
@@ -13,7 +12,7 @@ class Grammar(object):
         tokens = Tokens(src)
         if init is None:
             init = self.default_state
-        tree = ParseTree(init, STATE_LABEL, None)
+        tree = ParseTree(self.symbols, init)
         stack = [self.states[init]]
 
         while stack:
@@ -42,9 +41,9 @@ class Grammar(object):
             stack[-1] = arc[1]
             if arc[0] is not None:
                 stack.append(arc[0])
-                tree.add_down(Node(arc[0].name, tk.type, tk.string, tk.start))
+                tree.add_down(Node(arc[0].symbol, None, tk.start))
             else:
-                tree.add(Node(None, tk.type, tk.string, tk.start, tk.end))
+                tree.add(Node(tk.type, tk.string, tk.start, tk.end))
                 try:
                     tokens.next()
                 except StopIteration:
