@@ -11,6 +11,23 @@ class Node(object):
         self.start = start
         self.end = end
 
+    def filter(self, type, **kwargv):
+        if 'val' in kwargv:
+            val = kwargv['val']
+            for node in self.subs:
+                if node.type == type and node.val == val:
+                    yield node
+        else:
+            for node in self.subs:
+                if node.type == type:
+                    yield node
+
+    def __eq__(self, type):
+        return self.type == type
+
+    def __ne__(self, type):
+        return self.type != type
+
     def __iter__(self):
         yield from self.subs
 
