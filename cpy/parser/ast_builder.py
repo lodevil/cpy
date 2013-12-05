@@ -255,11 +255,41 @@ class ASTBuilder(object):
         return ast.Import(alias, *node.start)
 
     def handle_import_from(self, node):
-        pass
+        # import_from: ('from' (('.' | '...')* dotted_name | ('.' | '...')+)
+        #      'import' ('*' | '(' import_as_names ')' | import_as_names))
+        level = 0
+        for i in range(1, len(node)):
+            if node[i] != token.OP:
+                break
+            level += len(node[i].val)
+        if node[i] == syms.dotted_name:
+            module = self.handle_dotted_name(node[i])
+            i += 1
+        else:
+            module = None
+        v = node[i + 1].val
+        if v == '*':
+            names = [ast.alias('*', None)]
+        elif v == '(':
+            names = self.handle_import_as_names(node[i + 2])
+        else:
+            names = self.handle_import_as_names(node[i + 1])
+        return ast.ImportFrom(module, names, level, *node.start)
 
     def handle_dotted_name(self, node):
         # dotted_name: NAME ('.' NAME)*
         return '.'.join([n.val for n in node.filter(token.NAME)])
+
+    def handle_import_as_names(self, node):
+        # import_as_name: NAME ['as' NAME]
+        # import_as_names: import_as_name (',' import_as_name)* [',']
+        names = []
+        for n in node.filter(syms.import_as_name):
+            if len(n) == 1:
+                names.append(ast.alias(n[0].val, None))
+            else:
+                names.append(ast.alias(n[0].val, n[2].val))
+        return names
 
     def handle_global_stmt(self, global_stmt):
         pass
