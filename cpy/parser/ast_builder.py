@@ -131,7 +131,8 @@ class ASTBuilder(object):
     def handle_not_test(self, node):
         # not_test: 'not' not_test | comparison
         if len(node) == 2:
-            return self.handle_not_test(node[1])
+            return ast.UnaryOp(
+                ast.Not, self.handle_not_test(node[1]), *node.start)
         # comparison: expr (comp_op expr)*
         expr = self.handle_expr(node[0])
         if len(node) == 1:
@@ -220,6 +221,11 @@ class ASTBuilder(object):
 
     def handle_expr(self, node):
         # expr: xor_expr ('|' xor_expr)*
+        # xor_expr: and_expr ('^' and_expr)*
+        # and_expr: shift_expr ('&' shift_expr)*
+        # shift_expr: arith_expr (('<<'|'>>') arith_expr)*
+        # arith_expr: term (('+'|'-') term)*
+        # term: factor (('*'|'/'|'%'|'//') factor)*
         if node == syms.factor:
             return self.handle_factor(node)
         if len(node) == 1:
@@ -532,7 +538,7 @@ class ASTBuilder(object):
             if node[i] == syms.yield_expr:
                 targets.append(self.handle_yield_expr(node[i]))
             else:
-                targets.append(self.testlist_star_expr(node[i]))
+                targets.append(self.handle_testlist_star_expr(node[i]))
             i += 2
         return ast.Assign(targets[:-1], targets[-1], *node.start)
 
@@ -552,14 +558,39 @@ class ASTBuilder(object):
         # star_expr: '*' expr
         return ast.Starred(self.handle_expr(node[1]), ast.Store, *node.start)
 
-    def handle_del_stmt(self, del_stmt):
-        pass
+    def handle_del_stmt(self, node):
+        # del_stmt: 'del' exprlist
+        expr = self.handle_exprlist(node[1])
+        if isinstance(expr, ast.Tuple):
+            return ast.Delete(expr.elts, *node.start)
+        return ast.Delete([expr], *node.start)
 
-    def handle_pass_stmt(self, pass_stmt):
-        pass
+    def handle_pass_stmt(self, node):
+        # pass_stmt: 'pass'
+        return ast.Pass(*node.start)
 
-    def handle_flow_stmt(self, flow_stmt):
-        pass
+    def handle_flow_stmt(self, node):
+        # flow_stmt: break_stmt | continue_stmt | return_stmt
+        #          | raise_stmt | yield_stmt
+        # return_stmt: 'return' [testlist]
+        # break_stmt: 'break'
+        # continue_stmt: 'continue'
+        # yield_stmt: yield_expr
+        # raise_stmt: 'raise' [test ['from' test]]
+        node = node[0]
+        if node == syms.return_stmt:
+            if len(node) == 2:
+                return ast.Return(self.handle_testlist(node[1]), **node.start)
+            return ast.Return(None, **node.start)
+        elif node == syms.break_stmt:
+            return ast.Break(*node.start)
+        elif node == syms.continue_stmt:
+            return ast.Continue(*node.start)
+        elif node == syms.yield_stmt:
+            return self.handle_yield_expr(node[0])
+        exc = len(node) > 1 and self.handle_test(node[1]) or None
+        cause = len(node) == 4 and self.handle_test(node[3]) or None
+        return ast.Raise(exc, cause, *node.start)
 
     def handle_import_stmt(self, node):
         if node[0] == syms.import_name:
@@ -616,29 +647,65 @@ class ASTBuilder(object):
                 names.append(ast.alias(n[0].val, n[2].val))
         return names
 
-    def handle_global_stmt(self, global_stmt):
+    def handle_global_stmt(self, node):
+        # global_stmt: 'global' NAME (',' NAME)*
+        return ast.Global(list(node.filter(token.NAME)), *node.start)
+
+    def handle_nonlocal_stmt(self, node):
+        # nonlocal_stmt: 'nonlocal' NAME (',' NAME)*
+        return ast.Nonlocal(list(node.filter(token.NAME)), *node.start)
+
+    def handle_assert_stmt(self, node):
+        # assert_stmt: 'assert' test [',' test]
+        test = self.handle_test(node[1])
+        if len(node) == 2:
+            msg = None
+        else:
+            msg = self.handle_test(node[3])
+        return ast.Assert(test, msg, *node.start)
+
+    def handle_suite(self, node, get_stmts=False):
+        # suite: simple_stmt | NEWLINE INDENT stmt+ DEDENT
+        if len(node) == 1:
+            stmts = self.handle_simple_stmt(node[0])
+            if get_stmts:
+                return stmts
+            return ast.Suite(stmts)
+        stmts = []
+        for i in range(2, len(node) - 1):
+            stmts.extend(self.handle_stmt(node[i]))
+        if get_stmts:
+            return stmts
+        return ast.Suite(stmts)
+
+    def handle_if_stmt(self, node):
+        # if_stmt: 'if' test ':' suite ('elif' test ':' suite)* ['else' ':' suite]
+        test = self.handle_test(node[1])
+        body = self.handle_suite(node[3], get_stmts=True)
+        ifexpr = ast.IfExp(test, body, [], *node.start)
+        cur, i = ifexpr, 4
+        while i < len(node) and node[i].val == 'elif':
+            test = self.handle_test(node[i + 1])
+            body = self.handle_suite(node[i + 3], get_stmts=True)
+            expr = ast.IfExp(test, body, [], *node[i].start)
+            cur.orelse.append(expr)
+            cur = expr
+            i += 4
+        if i < len(node):
+            cur.orelse = self.handle_suite(node[-1], get_stmts=True)
+        return ifexpr
+
+    def handle_while_stmt(self, node):
         pass
 
-    def handle_nonlocal_stmt(self, nonlocal_stmt):
+    def handle_for_stmt(self, node):
         pass
 
-    def handle_assert_stmt(self, assert_stmt):
+    def handle_try_stmt(self, node):
         pass
 
-    def handle_if_stmt(self, if_stmt):
+    def handle_with_stmt(self, node):
         pass
 
-    def handle_while_stmt(self, while_stmt):
-        pass
-
-    def handle_for_stmt(self, for_stmt):
-        pass
-
-    def handle_try_stmt(self, try_stmt):
-        pass
-
-    def handle_with_stmt(self, with_stmt):
-        pass
-
-    def handle_funcdef(self, funcdef):
+    def handle_funcdef(self, node):
         pass
