@@ -353,20 +353,19 @@ class ASTBuilder(object):
             v = self.handle_test(node[2])
             return ast.keyword(k, v)
         return ast.GeneratorExp(self.handle_test(node[0]),
-            self.handle_comp_for(node[1]), *node.start)
+            self.get_comp_for(node[1]), *node.start)
 
-    def handle_comp_for(self, node):
+    def get_comp_for(self, node):
         # comp_for: 'for' exprlist 'in' or_test [comp_iter]
         # comp_iter: comp_for | comp_if
         compfor = ast.comprehension(
-            self.handle_exprlist(node[1]), self.handle_or_test(node[3]),
-            None, *node.start)
+            self.handle_exprlist(node[1]), self.handle_or_test(node[3]), None)
         if len(node) == 4:
             return [compfor]
         if node[-1][0] == syms.comp_if:
-            tails = self.handle_comp_if(node[-1][0])
+            tails = self.get_comp_if(node[-1][0])
         else:
-            tails = self.handle_comp_for(node[-1][0])
+            tails = self.get_comp_for(node[-1][0])
         ifs, i = [], 0
         while i < len(tails) and isinstance(tails[i], ast.Compare):
             ifs.append(tails[i])
@@ -374,21 +373,29 @@ class ASTBuilder(object):
         compfor.ifs = ifs
         return [compfor] + tails[i:]
 
-    def handle_comp_if(self, node):
+    def get_comp_if(self, node):
         # comp_if: 'if' test_nocond [comp_iter]
         # comp_iter: comp_for | comp_if
         comp = self.test_nocond(node[1])
         if len(node) == 3:
             if node[2][0] == syms.comp_if:
-                subs = self.handle_comp_if(node[2][0])
+                subs = self.get_comp_if(node[2][0])
             else:
-                subs = self.handle_comp_for(node[2][0])
+                subs = self.get_comp_for(node[2][0])
             return [comp] + subs
         return [comp]
 
     def handle_exprlist(self, node):
         # exprlist: (expr|star_expr) (',' (expr|star_expr))* [',']
-        pass
+        exprs = []
+        for n in node.subs:
+            if n == syms.expr:
+                exprs.append(self.handle_expr(n))
+            elif n == syms.star_expr:
+                exprs.append(self.handle_star_expr(n))
+        if len(exprs) == 1 and node[-1] != token.OP:
+            return exprs[0]
+        return ast.Tuple(exprs, ast.Store, *node.start)
 
     def handle_test_nocond(self, node):
         # test_nocond: or_test | lambdef_nocond
@@ -422,11 +429,11 @@ class ASTBuilder(object):
                 return ast.Tuple(None, ast.Load, *node.start)
             if node[1] == syms.yield_expr:
                 return self.handle_yield_expr(node[1])
-            return self.handle_testlist_comp(node[1])
+            return self.get_testlist_comp('(', node[1])
         elif n.val == '[':
             if len(node) == 2:
                 return ast.List(None, ast.Load, *node.start)
-            return self.handle_testlist_comp(node[1])
+            return self.get_testlist_comp('[', node[1])
         else:
             return self.handle_dictorsetmaker(node[1])
 
@@ -437,13 +444,73 @@ class ASTBuilder(object):
         return ''.join(strs)
 
     def handle_yield_expr(self, node):
-        pass
+        # yield_expr: 'yield' [yield_arg]
+        # yield_arg: 'from' test | testlist
+        if len(node) == 1:
+            return ast.Yield(None, *node.start)
+        if len(node[1]) == 1:
+            testlist = self.handle_testlist(node[1][0])
+            return ast.Yield(testlist, *node.start)
+        test = self.handle_test(node[1][1])
+        return ast.YieldFrom(test, *node.start)
 
-    def handle_testlist_comp(self, node):
-        pass
+    def get_testlist_comp(self, outter, node):
+        # testlist_comp: (test|star_expr) ( comp_for | (',' (test|star_expr))* [','] )
+        if node[0] == syms.test:
+            expr = self.handle_test(node[0])
+        else:
+            expr = self.handle_star_expr(node[0])
+        if len(node) == 1:
+            # (test|star_expr)
+            if outter == '(':
+                return expr
+            return ast.List([expr], ast.Load, *node.start)
+        if node[1] == syms.comp_for:
+            # (test|star_expr) comp_for
+            generators = self.get_comp_for(node[1])
+            return ast.GeneratorExp(expr, generators, *node.start)
+        # (test|star_expr) (',' (test|star_expr))* [',']
+        i = 2
+        elts = [expr]
+        while i < len(node):
+            if node[i] == syms.test:
+                elts.append(self.handle_test(node[i]))
+            else:
+                elts.append(self.handle_star_expr(node[i]))
+        if outter == '(':
+            return ast.Tuple(elts, ast.Load, *node.start)
+        return ast.List(elts, ast.Load, *node.start)
 
     def handle_dictorsetmaker(self, node):
-        pass
+        # dictorsetmaker: ( (test ':' test (comp_for | (',' test ':' test)* [','])) |
+        #                   (test (comp_for | (',' test)* [','])) )
+        if node[1] == token.OP:
+            if node[3] == syms.comp_for:
+                # test ':' test comp_for
+                k = self.handle_test(node[0])
+                v = self.handle_test(node[2])
+                generators = self.get_comp_for(node[3])
+                return ast.DictComp(k, v, generators, *node.start)
+            # test ':' test (',' test ':' test)* [',']
+            i = 0
+            keys, values = [], []
+            while i < len(node):
+                keys.append(self.handle_test(node[i]))
+                values.append(self.handle_test(node[i + 2]))
+                i += 4
+            return ast.Dict(keys, values, *node.start)
+        if node[1] == syms.comp_for:
+            # test comp_for
+            elt = self.handle_test(node[0])
+            generators = self.get_comp_for(node[1])
+            return ast.SetComp(elt, generators, *node.start)
+        # test (',' test)* [',']
+        elts = []
+        i = 0
+        while i < len(node):
+            elts.append(self.handle_test(node[i]))
+            i += 2
+        return ast.Set(elts, *node.start)
 
     def handle_expr_stmt(self, node):
         # expr_stmt: testlist_star_expr (augassign (yield_expr|testlist) |
