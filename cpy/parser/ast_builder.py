@@ -696,16 +696,40 @@ class ASTBuilder(object):
         return ifexpr
 
     def handle_while_stmt(self, node):
-        pass
+        # while_stmt: 'while' test ':' suite ['else' ':' suite]
+        test = self.handle_test(node[1])
+        body = self.handle_suite(node[3], get_stmts=True)
+        if len(node) == 4:
+            orelse = []
+        else:
+            orelse = self.handle_suite(node[6], get_stmts=True)
+        return ast.While(test, body, orelse, *node.start)
 
     def handle_for_stmt(self, node):
-        pass
+        # for_stmt: 'for' exprlist 'in' testlist ':' suite ['else' ':' suite]
+        target = self.handle_exprlist(node[1])
+        iterator = self.handle_testlist(node[3])
+        body = self.handle_suite(node[5], get_stmts=True)
+        if len(node) == 6:
+            orelse = []
+        else:
+            orelse = self.handle_suite(node[8], get_stmts=True)
+        return ast.For(target, iterator, body, orelse, *node.start)
 
     def handle_try_stmt(self, node):
+        # try_stmt: ('try' ':' suite
+        #            ((except_clause ':' suite)+
+        #             ['else' ':' suite]
+        #             ['finally' ':' suite] |
+        #            'finally' ':' suite))
         pass
 
     def handle_with_stmt(self, node):
+        # with_stmt: 'with' with_item (',' with_item)*  ':' suite
+        # with_item: test ['as' expr]
         pass
 
     def handle_funcdef(self, node):
+        # funcdef: 'def' NAME parameters ['->' test] ':' suite
+        # parameters: '(' [typedargslist] ')'
         pass
