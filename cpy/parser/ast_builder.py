@@ -727,7 +727,16 @@ class ASTBuilder(object):
     def handle_with_stmt(self, node):
         # with_stmt: 'with' with_item (',' with_item)*  ':' suite
         # with_item: test ['as' expr]
-        pass
+        items, i = [], 1
+        while i < len(node) and node[i] == syms.with_item:
+            wnode = node[i]
+            item = ast.withitem(self.handle_test(wnode[0]), None)
+            if len(wnode) == 3:
+                item.optional_vars = self.handle_test(wnode[2])
+            items.append(item)
+            i += 2
+        body = self.handle_suite(node[-1], get_stmts=True)
+        return ast.With(items, body, *node.start)
 
     def handle_funcdef(self, node):
         # funcdef: 'def' NAME parameters ['->' test] ':' suite
