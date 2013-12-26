@@ -24,25 +24,37 @@ class Type(object):
         self.super_type = super_type
         self.name = name
         self.attrs = attrs
+        self.init_args = attrs[:]
+        for i, arg in enumerate(self.attrs):
+            if arg.name == self.name:
+                self.init_args[i] = '_' + arg.name
 
     def generate(self, indent='    '):
         super_type = self.super_type and self.super_type.name or 'object'
         yield 'class %s(%s):\n' % (self.name, super_type)
-        attrs = [attr.name for attr in self.attrs]
-        if attrs:
-            yield indent
-            if len(attrs) == 1:
-                yield '__slots__ = (%s,)\n\n' % repr(attrs[0])
+
+        attrs = []
+        for attr in self.attrs:
+            if attr.name == self.name:
+                attrs.append((attr.name, '_' + attr.name))
             else:
-                yield '__slots__ = (%s)\n\n' % ', '.join(map(repr, attrs))
-            init = 'def __init__(self, %s, *argv, **kwargv):\n' % ', '.join(attrs)
-            yield indent + init
-            for attr in self.attrs:
-                yield indent * 2 + 'self.{0} = {0}\n'.format(attr.name)
-            upper = 'super(%s, self).__init__(*argv, **kwargv)\n' % self.name
-            yield indent * 2 + upper
+                attrs.append((attr.name, attr.name))
+        if len(attrs) == 1:
+            yield indent + '__slots__ = (%s,)\n\n' % repr(attrs[0][0])
         else:
-            yield indent + '__slots__ = ()\n'
+            yield indent + '__slots__ = (%s)\n\n' % ', '.join(
+                map(lambda x: repr(x[0]), attrs))
+        
+        if attrs:
+            init = 'def __init__(self, %s, *argv, **kwargv):\n' % ', '.join(
+                map(lambda x: x[1], attrs))
+            yield indent + init
+            for attr in attrs:
+                yield indent * 2 + 'self.%s = %s\n' % (attr[0], attr[1])
+        else:
+            yield indent + 'def __init__(self, *argv, **kwargv):\n'
+        upper = 'super(%s, self).__init__(*argv, **kwargv)\n' % self.name
+        yield indent * 2 + upper
 
     def __repr__(self):
         if self.super_type is not None:
