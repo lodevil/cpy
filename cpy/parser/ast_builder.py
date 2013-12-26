@@ -783,3 +783,38 @@ class ASTBuilder(object):
         body = self.handle_suite(node[-1], get_stmts=True)
         return ast.ClassDef(
             name, bases, keywords, starargs, kwargs, body, [], *node.start)
+
+    def handle_decorated(self, node):
+        # decorated: decorators (classdef | funcdef)
+        # decorators: decorator+
+        # decorator: '@' dotted_name [ '(' [arglist] ')' ] NEWLINE
+        # dotted_name: NAME ('.' NAME)*
+        if node[1] == syms.funcdef:
+            funccls = self.handle_funcdef(node[1])
+        else:
+            funccls = self.handle_classdef(node[1])
+        decs, i = [], 0
+        for n in node[0]:
+            name = self.get_attribute(node[1])
+            if n[2].val == '(':
+                if len(n) == 6:
+                    args, keywords, starargs, kwargs = self.get_arglist(n[3])
+                else:
+                    args, keywords, starargs, kwargs = [], [], None, None
+                decs.append(ast.Call(
+                    name, args, keywords, starargs, kwargs, *n[1].start))
+            else:
+                decs.append(name)
+        funccls.decorator_list = decs
+        return funccls
+
+    def get_attribute(self, node):
+        # dotted_name: NAME ('.' NAME)*
+        if len(node) == 1:
+            return ast.Name(node[0].val, ast.Load, *node.start)
+        attr = ast.Attribute(node[0].val, node[2].val, ast.Load, *node.start)
+        i = 3
+        while i < len(node):
+            attr = ast.Attribute(attr, node[i].val, ast.Load, *node.start)
+            i += 2
+        return attr
