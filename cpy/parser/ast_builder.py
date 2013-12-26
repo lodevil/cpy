@@ -172,8 +172,9 @@ class ASTBuilder(object):
     def handle_lambdef(self, node):
         # lambdef: 'lambda' [varargslist] ':' test
         if len(node) == 3:
-            args = ast.arguments(
-                None, None, None, None, None, None, None, None)
+            args = ast.arguments(args=[], vararg=None, varargannotation=None,
+                kwonlyargs=[], kwarg=None, kwargannotation=None,
+                defaults=[], kw_defaults=[])
         else:
             args = self.handle_varargslist(node[1])
         return ast.Lambda(args, self.handle_test(node[-1]), *node.start)
@@ -240,8 +241,8 @@ class ASTBuilder(object):
             argument.defaults = defaults
             return argument
         return ast.arguments(args=args, vararg=None, varargannotation=None,
-            kwonlyargs=[], kwarg=None, kwargannotation=[], defaults=defaults,
-            kw_defaults=None)
+            kwonlyargs=[], kwarg=None, kwargannotation=None, defaults=defaults,
+            kw_defaults=[])
     handle_typedargslist = handle_varargslist
 
     def handle_expr(self, node):
@@ -299,7 +300,7 @@ class ASTBuilder(object):
             return ast.Attribute(atom, node[1].val, ast.Load, *node.start)
         elif v == '(':
             if len(node) == 2:
-                return ast.Call(atom, None, None, None, None, *node.start)
+                return ast.Call(atom, [], [], None, None, *node.start)
             args, keywords, starargs, kwargs = self.get_arglist(node[1])
             return ast.Call(atom, args, keywords, starargs, kwargs, *node.start)
         return self.get_subscriptlist(atom, node[1])
@@ -389,8 +390,12 @@ class ASTBuilder(object):
     def get_comp_for(self, node):
         # comp_for: 'for' exprlist 'in' or_test [comp_iter]
         # comp_iter: comp_for | comp_if
-        compfor = ast.comprehension(
-            self.handle_exprlist(node[1]), self.handle_or_test(node[3]), None)
+        target = self.handle_exprlist(node[1])
+        if not isinstance(target, ast.AssignTypes):
+            raise SyntaxError('invalid assign to %s' % type(target).__name__,
+                    ('<src>', node[1].start[0], node[1].start[1], None))
+        target.ctx = ast.Store
+        compfor = ast.comprehension(target, self.handle_or_test(node[3]), [])
         if len(node) == 4:
             return [compfor]
         if node[-1][0] == syms.comp_if:
@@ -435,8 +440,9 @@ class ASTBuilder(object):
             return self.handle_or_test(node[0])
         node = node[0]
         if len(node) == 3:
-            args = ast.arguments(
-                None, None, None, None, None, None, None, None)
+            args = ast.arguments(args=[], vararg=None, varargannotation=None,
+                kwonlyargs=[], kwarg=None, kwargannotation=None,
+                defaults=[], kw_defaults=[])
         else:
             args = self.handle_varargslist(node[1])
         return ast.Lambda(args, self.handle_test_nocond(node[-1]), *node.start)
@@ -553,6 +559,10 @@ class ASTBuilder(object):
         expr = self.handle_testlist_star_expr(node[0])
         if len(node) == 1:
             return  ast.Expr(expr, *node.start)
+        if not isinstance(expr, ast.AssignTypes):
+            raise SyntaxError('invalid assign to %s' % type(expr).__name__,
+                    ('<src>', node.start[0], node.start[1], None))
+        expr.ctx = ast.Store
         if node[1] == syms.augassign:
             op = operator_map[node[1][0].val]
             if node[2] == syms.yield_expr:
@@ -560,13 +570,21 @@ class ASTBuilder(object):
                     expr, op, self.handle_yield_expr(node[2]), *node.start)
             return ast.AugAssign(
                 expr, op, self.handle_testlist(node[2]), *node.start)
+
         targets, i = [expr], 2
         while i < len(node):
             if node[i] == syms.yield_expr:
-                targets.append(self.handle_yield_expr(node[i]))
+                t = self.handle_yield_expr(node[i])
             else:
-                targets.append(self.handle_testlist_star_expr(node[i]))
+                t = self.handle_testlist_star_expr(node[i])
+            targets.append(t)
             i += 2
+        for t in targets[:-1]:
+            if not isinstance(t, ast.AssignTypes):
+                raise SyntaxError('invalid assign to %s' % type(t).__name__,
+                    ('<src>', node[i].start[0], node[i].start[1], None))
+            t.ctx = ast.Store
+        targets[-1].ctx = ast.Load
         return ast.Assign(targets[:-1], targets[-1], *node.start)
 
     def handle_testlist_star_expr(self, node):
@@ -735,6 +753,10 @@ class ASTBuilder(object):
     def handle_for_stmt(self, node):
         # for_stmt: 'for' exprlist 'in' testlist ':' suite ['else' ':' suite]
         target = self.handle_exprlist(node[1])
+        if not isinstance(target, ast.AssignTypes):
+            raise SyntaxError('invalid assign to %s' % type(target).__name__,
+                    ('<src>', node[1].start[0], node[1].start[1], None))
+        target.ctx = ast.Store
         iterator = self.handle_testlist(node[3])
         body = self.handle_suite(node[5], get_stmts=True)
         if len(node) == 6:
