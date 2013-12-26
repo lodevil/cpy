@@ -167,7 +167,7 @@ class ASTBuilder(object):
             kwargannotation = node[1][2].val if len(node[1]) == 3 else None
             return ast.arguments(args=[], vararg=None, varargannotation=None,
                 kwonlyargs=[], kwarg=kwarg, kwargannotation=kwargannotation,
-                defaults=[], kw_defaults=[], *node[0].start)
+                defaults=[], kw_defaults=[])
         elif node[0].val == '*':
             vararg, i = node[1][0].val, 3
             varargannotation = node[1][2].val if len(node[1]) == 3 else None
@@ -191,7 +191,7 @@ class ASTBuilder(object):
             return ast.arguments(args=[], vararg=vararg,
                 varargannotation=varargannotation, kwonlyargs=kwonlyargs,
                 kwarg=kwarg, kwargannotation=kwargannotation,
-                defaults=[], kw_defaults=kw_defaults, *node[0].start)
+                defaults=[], kw_defaults=kw_defaults)
         i = 0
         args = []
         defaults = []
@@ -200,7 +200,7 @@ class ASTBuilder(object):
             if len(node[i]) == 3:
                 arg.annotation = node[i][2].val
             args.append(arg)
-            if node[i + 1].val == '=':
+            if i + 1 < len(node) and node[i + 1].val == '=':
                 defaults.append(self.handle_test(node[i + 2]))
                 i += 4
             elif len(defaults) > 0:
@@ -216,7 +216,7 @@ class ASTBuilder(object):
             return argument
         return ast.arguments(args=args, vararg=None, varargannotation=None,
             kwonlyargs=[], kwarg=None, kwargannotation=[], defaults=defaults,
-            kw_defaults=None, *node.start)
+            kw_defaults=None)
     handle_typedargslist = handle_varargslist
 
     def handle_expr(self, node):
@@ -722,7 +722,25 @@ class ASTBuilder(object):
         #             ['else' ':' suite]
         #             ['finally' ':' suite] |
         #            'finally' ':' suite))
-        pass
+        # except_clause: 'except' [test ['as' NAME]]
+        body = self.handle_suite(node[2], get_stmts=True)
+        handlers, i = [], 3
+        while i < len(node) and node[i] == syms.except_clause:
+            expnode = node[i]
+            exptype = len(expnode) > 1 and self.handle_test(expnode[1]) or None
+            expname = len(expnode) > 2 and expnode[3].val or None
+            expbody = self.handle_suite(node[i + 2], get_stmts=True)
+            handlers.append(
+                ast.ExceptHandler(exptype, expname, expbody, *expnode.start))
+            i += 3
+        orelse = []
+        if i < len(node) and node[i].val == 'else':
+            orelse = self.handle_suite(node[i + 2], get_stmts=True)
+            i += 3
+        finalbody = []
+        if i < len(node) and node[i].val == 'finally':
+            finalbody = self.handle_suite(node[i + 2], get_stmts=True)
+        return ast.Try(body, handlers, orelse, finalbody, *node.start)
 
     def handle_with_stmt(self, node):
         # with_stmt: 'with' with_item (',' with_item)*  ':' suite
@@ -741,4 +759,27 @@ class ASTBuilder(object):
     def handle_funcdef(self, node):
         # funcdef: 'def' NAME parameters ['->' test] ':' suite
         # parameters: '(' [typedargslist] ')'
-        pass
+        name = node[1].val
+        if len(node[2]) == 2:
+            params = ast.arguments(args=[], vararg=None, varargannotation=None,
+                kwonlyargs=[], kwarg=None, kwargannotation=None,
+                defaults=[], kw_defaults=[])
+        else:
+            params = self.handle_typedargslist(node[2][1])
+        if node[3].val == ':':
+            returns = None
+        else:
+            returns = self.handle_test(node[4])
+        body = self.handle_suite(node[-1], get_stmts=True)
+        return ast.FunctionDef(name, params, body, [], returns, *node.start)
+
+    def handle_classdef(self, node):
+        # classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
+        name = node[1].val
+        if len(node) == 7:
+            bases, keywords, starargs, kwargs = self.get_arglist(node[3])
+        else:
+            bases, keywords, starargs, kwargs = [], [], None, None
+        body = self.handle_suite(node[-1], get_stmts=True)
+        return ast.ClassDef(
+            name, bases, keywords, starargs, kwargs, body, [], *node.start)
