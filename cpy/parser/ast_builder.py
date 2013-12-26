@@ -134,12 +134,13 @@ class ASTBuilder(object):
             return ast.UnaryOp(
                 ast.Not, self.handle_not_test(node[1]), *node.start)
         # comparison: expr (comp_op expr)*
+        node = node[0]
         expr = self.handle_expr(node[0])
         if len(node) == 1:
             return expr
         operators = []
         operands = []
-        for i in range(1, len(expr), 2):
+        for i in range(1, len(node), 2):
             operators.append(node[i][0])
             operands.append(self.handle_expr(node[i + 1]))
         return ast.Compare(expr, operators, operands, *node.start)
@@ -285,20 +286,20 @@ class ASTBuilder(object):
         # sliceop: ':' [test]
         if len(node) == 1:
             sl = self.get_slice(node[0])
-            return ast.Subscript(left, sl, *node.start)
+            return ast.Subscript(left, sl, ast.Load, *node.start)
         slices = []
         for n in node.filter(syms.subscript):
             slices.append(self.get_slice(n))
-        extsl = ast.ExtSlice(slices, *node.start)
-        return ast.Subscript(left, extsl, *node.start)
+        extsl = ast.ExtSlice(slices)
+        return ast.Subscript(left, extsl, ast.Load, *node.start)
 
     def get_slice(self, node):
         # subscript: test | [test] ':' [test] [sliceop]
         # sliceop: ':' [test]
         if len(node) == 1:
             if node[0] == syms.test:
-                return ast.Index(self.handle_test(node[0]), *node.start)
-            return ast.Slice(None, None, None, *node.start)
+                return ast.Index(self.handle_test(node[0]))
+            return ast.Slice(None, None, None)
         if node[0] == syms.test:
             lower = self.handle_test(node[0])
             next = 2
@@ -311,8 +312,8 @@ class ASTBuilder(object):
                 sliceop = node[next]
                 if len(sliceop) == 2:
                     step = self.handle_test(sliceop[1])
-            return ast.Slice(lower, upper, step, *node.start)
-        return ast.Slice(lower, None, None, *node.start)
+            return ast.Slice(lower, upper, step)
+        return ast.Slice(lower, None, None)
 
     def get_arglist(self, node):
         # arglist: (argument ',')* (argument [',']
@@ -483,6 +484,7 @@ class ASTBuilder(object):
                 elts.append(self.handle_test(node[i]))
             else:
                 elts.append(self.handle_star_expr(node[i]))
+            i += 2
         if outter == '(':
             return ast.Tuple(elts, ast.Load, *node.start)
         return ast.List(elts, ast.Load, *node.start)
@@ -580,8 +582,8 @@ class ASTBuilder(object):
         node = node[0]
         if node == syms.return_stmt:
             if len(node) == 2:
-                return ast.Return(self.handle_testlist(node[1]), **node.start)
-            return ast.Return(None, **node.start)
+                return ast.Return(self.handle_testlist(node[1]), *node.start)
+            return ast.Return(None, *node.start)
         elif node == syms.break_stmt:
             return ast.Break(*node.start)
         elif node == syms.continue_stmt:
