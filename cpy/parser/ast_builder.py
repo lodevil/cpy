@@ -53,6 +53,19 @@ operator_map = {
     '>=': ast.GtE,
 }
 
+compare_map = {
+    '==': ast.Eq,
+    '!=': ast.NotEq,
+    '<': ast.Lt,
+    '<=': ast.LtE,
+    '>': ast.Gt,
+    '>=': ast.GtE,
+    'is': ast.Is,
+    'is not': ast.IsNot,
+    'in': ast.In,
+    'not in': ast.NotIn,
+}
+
 
 @six.add_metaclass(ASTMeta)
 class ASTBuilder(object):
@@ -146,6 +159,7 @@ class ASTBuilder(object):
             return ast.UnaryOp(
                 ast.Not, self.handle_not_test(node[1]), *node.start)
         # comparison: expr (comp_op expr)*
+        # comp_op: '<'|'>'|'=='|'>='|'<='|'<>'|'!='|'in'|'not' 'in'|'is'|'is' 'not'
         node = node[0]
         expr = self.handle_expr(node[0])
         if len(node) == 1:
@@ -153,7 +167,11 @@ class ASTBuilder(object):
         operators = []
         operands = []
         for i in range(1, len(node), 2):
-            operators.append(node[i][0])
+            if len(node[i]) == 1:
+                op = node[i][0].val
+            else:
+                op = '%s %s' % (node[i][0].val, node[i][1].val)
+            operators.append(compare_map[op])
             operands.append(self.handle_expr(node[i + 1]))
         return ast.Compare(expr, operators, operands, *node.start)
 
