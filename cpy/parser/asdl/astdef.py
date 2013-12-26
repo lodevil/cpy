@@ -28,15 +28,31 @@ class NotEqual(object):
 
 
 class ASTNode(object):
+    @classmethod
+    def compare(cls, a, b):
+        if type(a) is type:
+            if a.__name__ != type(b).__name__:
+                return False
+        else:
+            if a is Equal:
+                return True
+            if isinstance(a, list):
+                if not isinstance(b, list):
+                    return False
+                for ai, bi in zip(a, b):
+                    if not cls.compare(ai, bi):
+                        return False
+            elif a != b:
+                return False
+        return True
+
     def __eq__(self, obj):
         if obj is Equal:
             return True
         for attr in self.__slots__:
             a = getattr(self, attr, NotEqual())
             b = getattr(obj, attr, NotEqual())
-            if a is Equal or b is Equal:
-                continue
-            if a != b:
+            if not self.compare(a, b):
                 return False
         return True
 '''

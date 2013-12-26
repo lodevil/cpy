@@ -45,12 +45,6 @@ operator_map = {
     '&=': ast.BitAnd,
     '//': ast.FloorDiv,
     '//=': ast.FloorDiv,
-    '==': ast.Eq,
-    '!=': ast.NotEq,
-    '<': ast.Lt,
-    '<=': ast.LtE,
-    '>': ast.Gt,
-    '>=': ast.GtE,
 }
 
 compare_map = {
@@ -715,12 +709,12 @@ class ASTBuilder(object):
         # if_stmt: 'if' test ':' suite ('elif' test ':' suite)* ['else' ':' suite]
         test = self.handle_test(node[1])
         body = self.handle_suite(node[3], get_stmts=True)
-        ifexpr = ast.IfExp(test, body, [], *node.start)
+        ifexpr = ast.If(test, body, [], *node.start)
         cur, i = ifexpr, 4
         while i < len(node) and node[i].val == 'elif':
             test = self.handle_test(node[i + 1])
             body = self.handle_suite(node[i + 3], get_stmts=True)
-            expr = ast.IfExp(test, body, [], *node[i].start)
+            expr = ast.If(test, body, [], *node[i].start)
             cur.orelse.append(expr)
             cur = expr
             i += 4
