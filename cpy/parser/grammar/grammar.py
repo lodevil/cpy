@@ -9,6 +9,8 @@ class Grammar(object):
         self.default_state = default_state
 
     def parse(self, src, init=None):
+        if not src or src[-1] != '\n':
+            src += '\n'
         tokens = Tokens(src)
         if init is None:
             init = self.default_state
