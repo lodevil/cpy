@@ -24,8 +24,6 @@ class Type(object):
         self.super_type = super_type
         self.name = name
         self.attrs = attrs
-        if super_type:
-            self.attrs += super_type.attrs
 
     def generate(self, indent='    '):
         super_type = self.super_type and self.super_type.name or 'object'
@@ -37,12 +35,14 @@ class Type(object):
                 yield '__slots__ = (%s,)\n\n' % repr(attrs[0])
             else:
                 yield '__slots__ = (%s)\n\n' % ', '.join(map(repr, attrs))
-            yield indent + 'def __init__(self, %s):\n' % ', '.join(attrs)
+            init = 'def __init__(self, %s, *argv, **kwargv):\n' % ', '.join(attrs)
+            yield indent + init
             for attr in self.attrs:
                 yield indent * 2 + 'self.{0} = {0}\n'.format(attr.name)
+            upper = 'super(%s, self).__init__(*argv, **kwargv)\n' % self.name
+            yield indent * 2 + upper
         else:
             yield indent + '__slots__ = ()\n'
-
 
     def __repr__(self):
         if self.super_type is not None:
