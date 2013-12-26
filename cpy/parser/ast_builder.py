@@ -22,17 +22,29 @@ class ASTMeta(type):
 
 operator_map = {
     '+': ast.Add,
+    '+=': ast.Add,
     '-': ast.Sub,
+    '-=': ast.Sub,
     '*': ast.Mult,
+    '*=': ast.Mult,
     '/': ast.Div,
+    '/=': ast.Div,
     '%': ast.Mod,
+    '%=': ast.Mod,
     '**': ast.Pow,
+    '**=': ast.Pow,
     '<<': ast.LShift,
+    '<<=': ast.LShift,
     '>>': ast.RShift,
+    '>>=': ast.RShift,
     '|': ast.BitOr,
+    '|=': ast.BitOr,
     '^': ast.BitXor,
+    '^=': ast.BitXor,
     '&': ast.BitAnd,
+    '&=': ast.BitAnd,
     '//': ast.FloorDiv,
+    '//=': ast.FloorDiv,
     '==': ast.Eq,
     '!=': ast.NotEq,
     '<': ast.Lt,
@@ -252,7 +264,7 @@ class ASTBuilder(object):
             uop = ast.USub
         else:
             uop = ast.Invert
-        return ast.UnaryOp(uop, self.handle_power(node[1]), *node.start)
+        return ast.UnaryOp(uop, self.handle_factor(node[1]), *node.start)
 
     def handle_power(self, node):
         # power: atom trailer* ['**' factor]
@@ -492,7 +504,7 @@ class ASTBuilder(object):
     def handle_dictorsetmaker(self, node):
         # dictorsetmaker: ( (test ':' test (comp_for | (',' test ':' test)* [','])) |
         #                   (test (comp_for | (',' test)* [','])) )
-        if node[1] == token.OP:
+        if len(node) > 1 and node[1] == token.OP:
             if node[3] == syms.comp_for:
                 # test ':' test comp_for
                 k = self.handle_test(node[0])
@@ -507,7 +519,8 @@ class ASTBuilder(object):
                 values.append(self.handle_test(node[i + 2]))
                 i += 4
             return ast.Dict(keys, values, *node.start)
-        if node[1] == syms.comp_for:
+        # (test (comp_for | (',' test)* [',']))
+        if len(node) > 1 and node[1] == syms.comp_for:
             # test comp_for
             elt = self.handle_test(node[0])
             generators = self.get_comp_for(node[1])
@@ -529,7 +542,7 @@ class ASTBuilder(object):
         if len(node) == 1:
             return  ast.Expr(expr, *node.start)
         if node[1] == syms.augassign:
-            op = operator_map[node[1][0]]
+            op = operator_map[node[1][0].val]
             if node[2] == syms.yield_expr:
                 return ast.AugAssign(
                     expr, op, self.handle_yield_expr(node[2]), *node.start)
@@ -554,7 +567,7 @@ class ASTBuilder(object):
                 exprs.append(self.handle_star_expr(n))
         if len(exprs) == 1 and  node[-1] != token.OP:
             return exprs[0]
-        return ast.Tuple(exprs, ast.Store)
+        return ast.Tuple(exprs, ast.Store, *node.start)
 
     def handle_star_expr(self, node):
         # star_expr: '*' expr
