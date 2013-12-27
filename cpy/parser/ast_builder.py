@@ -400,7 +400,7 @@ class ASTBuilder(object):
         if not isinstance(target, ast.AssignTypes):
             raise self.syntax_error(
                 'invalid assign to %s' % type(target).__name__, node[1])
-        target.ctx = ast.Store
+        self.loop_mark_ctx(target, ast.Store)
         compfor = ast.comprehension(target, self.handle_or_test(node[3]), [])
         if len(node) == 4:
             return [compfor]
@@ -568,7 +568,7 @@ class ASTBuilder(object):
         if not isinstance(expr, ast.AssignTypes):
             raise self.syntax_error(
                 'invalid assign to %s' % type(expr).__name__, node)
-        expr.ctx = ast.Store
+        self.loop_mark_ctx(expr, ast.Store)
         if node[1] == syms.augassign:
             op = operator_map[node[1][0].val]
             if node[2] == syms.yield_expr:
@@ -578,22 +578,30 @@ class ASTBuilder(object):
                 expr, op, self.handle_testlist(node[2]), *node.start)
 
         targets, i = [expr], 2
-        indexes = [0]
-        while i < len(node):
+        for i in range(2, len(node) - 1, 2):
             if node[i] == syms.yield_expr:
                 t = self.handle_yield_expr(node[i])
             else:
                 t = self.handle_testlist_star_expr(node[i])
-            targets.append(t)
-            indexes.append(i)
-            i += 2
-        for i, t in enumerate(targets[:-1]):
             if not isinstance(t, ast.AssignTypes):
                 raise self.syntax_error(
-                    'invalid assign to %s' % type(t).__name__, node[indexes[i]])
-            t.ctx = ast.Store
-        targets[-1].ctx = ast.Load
-        return ast.Assign(targets[:-1], targets[-1], *node.start)
+                    'invalid assign to %s' % type(t).__name__, node[i])
+            self.loop_mark_ctx(t, ast.Store)
+            targets.append(t)
+            i += 2
+        if node[-1] == syms.yield_expr:
+            value = self.handle_yield_expr(node[-1])
+        else:
+            value = self.handle_testlist_star_expr(node[-1])
+        self.loop_mark_ctx(value, ast.Load)
+        return ast.Assign(targets, value, *node.start)
+
+    @classmethod
+    def loop_mark_ctx(cls, obj, ctx):
+        obj.ctx = ctx
+        if isinstance(obj, (ast.List, ast.Tuple)):
+            for elt in obj.elts:
+                cls.loop_mark_ctx(elt, ctx)
 
     def handle_testlist_star_expr(self, node):
         # testlist_star_expr: (test|star_expr) (',' (test|star_expr))* [',']
@@ -764,7 +772,7 @@ class ASTBuilder(object):
         if not isinstance(target, ast.AssignTypes):
             raise self.syntax_error(
                 'invalid assign to %s' % type(target).__name__, node[1])
-        target.ctx = ast.Store
+        self.loop_mark_ctx(target, ast.Store)
         iterator = self.handle_testlist(node[3])
         body = self.handle_suite(node[5], get_stmts=True)
         if len(node) == 6:
