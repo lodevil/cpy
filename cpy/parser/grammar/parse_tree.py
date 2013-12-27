@@ -44,9 +44,9 @@ class Node(object):
 class ParseTree(object):
     def __init__(self, symbols, name):
         self.symbols = symbols
-        self.entry = Node(symbols[name], None)
+        self.root = Node(symbols[name], None)
         self.stack = []
-        self.cur = self.entry
+        self.cur = self.root
 
     def add(self, node):
         self.cur.subs.append(node)
@@ -70,4 +70,4 @@ class ParseTree(object):
                     tokenize.tok_name[node.type], node.val))
             for n in node.subs:
                 printnode(n, indent + '  ')
-        printnode(self.entry, '')
+        printnode(self.root, '')

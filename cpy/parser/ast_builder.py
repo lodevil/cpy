@@ -1,5 +1,6 @@
 from . import ast
 from .pystates import symbols as syms
+from .grammar.sourcefile import SourceFile
 import token
 import six
 
@@ -63,9 +64,16 @@ compare_map = {
 
 @six.add_metaclass(ASTMeta)
 class ASTBuilder(object):
-    def __init__(self, root_node):
-        self.root = root_node
+    def __init__(self, src):
+        if not isinstance(src, SourceFile):
+            raise Exception('invalid sourcefile')
+        self.src = src
+        self.root = src.parse_tree.root
         self.ast = self.build()
+
+    def syntax_error(self, msg, node):
+        return SyntaxError(msg, (self.src.name, node.start[0], node.start[1],
+                self.src.get_line(node.start[0])))
 
     def build(self):
         n = self.root
@@ -231,8 +239,8 @@ class ASTBuilder(object):
                 i += 4
             elif len(defaults) > 0:
                 # TODO: get line
-                raise SyntaxError('non-default argument follows default argument',
-                    ('<src>', node.start[0], node.start[1], None))
+                raise self.syntax_error(
+                    'non-default argument follows default argument', node)
             else:
                 i += 2
         if i < len(node):
@@ -354,8 +362,7 @@ class ASTBuilder(object):
             elif len(keywords) == 0:
                 args.append(arg)
             else:
-                raise SyntaxError('non-keyword arg after keyword arg',
-                    ('<src>', node.start[0], node.start[1], None))
+                raise self.syntax_error('non-keyword arg after keyword arg', node)
             i += 2
         if i >= len(node):
             pass
@@ -365,9 +372,8 @@ class ASTBuilder(object):
             while i < len(node) and node[i] == syms.argument:
                 kw = self.handle_argument(node[i])
                 if not isinstance(kw, ast.keyword):
-                    raise SyntaxError(
-                        'only named arguments may follow *expression',
-                        ('<src>', node.start[0], node.start[1], None))
+                    raise self.syntax_error(
+                        'only named arguments may follow *expression', node)
                 keywords.append(kw)
                 i += 2
             if i < len(node):
@@ -392,8 +398,8 @@ class ASTBuilder(object):
         # comp_iter: comp_for | comp_if
         target = self.handle_exprlist(node[1])
         if not isinstance(target, ast.AssignTypes):
-            raise SyntaxError('invalid assign to %s' % type(target).__name__,
-                    ('<src>', node[1].start[0], node[1].start[1], None))
+            raise self.syntax_error(
+                'invalid assign to %s' % type(target).__name__, node[1])
         target.ctx = ast.Store
         compfor = ast.comprehension(target, self.handle_or_test(node[3]), [])
         if len(node) == 4:
@@ -560,8 +566,8 @@ class ASTBuilder(object):
         if len(node) == 1:
             return  ast.Expr(expr, *node.start)
         if not isinstance(expr, ast.AssignTypes):
-            raise SyntaxError('invalid assign to %s' % type(expr).__name__,
-                    ('<src>', node.start[0], node.start[1], None))
+            raise self.syntax_error(
+                'invalid assign to %s' % type(expr).__name__, node)
         expr.ctx = ast.Store
         if node[1] == syms.augassign:
             op = operator_map[node[1][0].val]
@@ -572,17 +578,19 @@ class ASTBuilder(object):
                 expr, op, self.handle_testlist(node[2]), *node.start)
 
         targets, i = [expr], 2
+        indexes = [0]
         while i < len(node):
             if node[i] == syms.yield_expr:
                 t = self.handle_yield_expr(node[i])
             else:
                 t = self.handle_testlist_star_expr(node[i])
             targets.append(t)
+            indexes.append(i)
             i += 2
-        for t in targets[:-1]:
+        for i, t in enumerate(targets[:-1]):
             if not isinstance(t, ast.AssignTypes):
-                raise SyntaxError('invalid assign to %s' % type(t).__name__,
-                    ('<src>', node[i].start[0], node[i].start[1], None))
+                raise self.syntax_error(
+                    'invalid assign to %s' % type(t).__name__, node[indexes[i]])
             t.ctx = ast.Store
         targets[-1].ctx = ast.Load
         return ast.Assign(targets[:-1], targets[-1], *node.start)
@@ -754,8 +762,8 @@ class ASTBuilder(object):
         # for_stmt: 'for' exprlist 'in' testlist ':' suite ['else' ':' suite]
         target = self.handle_exprlist(node[1])
         if not isinstance(target, ast.AssignTypes):
-            raise SyntaxError('invalid assign to %s' % type(target).__name__,
-                    ('<src>', node[1].start[0], node[1].start[1], None))
+            raise self.syntax_error(
+                'invalid assign to %s' % type(target).__name__, node[1])
         target.ctx = ast.Store
         iterator = self.handle_testlist(node[3])
         body = self.handle_suite(node[5], get_stmts=True)

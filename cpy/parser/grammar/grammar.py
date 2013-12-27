@@ -1,5 +1,5 @@
 from .parse_tree import Node, ParseTree
-from .tokens import Tokens
+from .sourcefile import SourceFile
 
 
 class Grammar(object):
@@ -8,29 +8,28 @@ class Grammar(object):
         self.states = states
         self.default_state = default_state
 
-    def parse(self, src, init=None):
-        if not src or src[-1] != '\n':
-            src += '\n'
-        tokens = Tokens(src)
+    def parse(self, src=None, path=None, init=None):
+        src = SourceFile(path=path, src=src)
+        tokens = src.tokens()
         if init is None:
             init = self.default_state
         tree = ParseTree(self.symbols, init)
         stack = [self.states[init]]
 
+        tk = next(tokens)
         while stack:
             state = stack[-1]
-            tk = tokens.cur
             #get arc
-            if tk.type not in state.bootstrap:
+            val_arcs = state.bootstrap.get(tk.type, None)
+            if val_arcs is None:
                 if state.is_final:
                     stack = stack[:-1]
                     if stack:
                         tree.up()
                     continue
                 raise SyntaxError('invalid grammar0',
-                    ('<src>', tk.start[0], tk.start[1], tk.line))
-            arc = state.bootstrap[tk.type].get(tk.string, None) or \
-                    state.bootstrap[tk.type].get(None, None)
+                    (src.name, tk.start[0], tk.start[1], tk.line))
+            arc = val_arcs.get(tk.string, None) or val_arcs.get(None, None)
             if arc is None:
                 if state.is_final:
                     stack = stack[:-1]
@@ -38,7 +37,7 @@ class Grammar(object):
                         tree.up()
                     continue
                 raise SyntaxError('invalid grammar1',
-                    ('<src>', tk.start[0], tk.start[1], tk.line))
+                    (src.name, tk.start[0], tk.start[1], tk.line))
             #process arc
             stack[-1] = arc[1]
             if arc[0] is not None:
@@ -47,7 +46,7 @@ class Grammar(object):
             else:
                 tree.add(Node(tk.type, tk.string, tk.start, tk.end))
                 try:
-                    tokens.next()
+                    tk = next(tokens)
                 except StopIteration:
                     if arc[1].is_final:
                         stack = stack[:-1]
@@ -55,13 +54,15 @@ class Grammar(object):
                             tree.up()
                         break
                     raise SyntaxError('unexpected end',
-                        ('<src>', tk.start[0], tk.start[1], tk.line))
+                        (src.name, tk.start[0], tk.start[1], tk.line))
 
         #check no more tokens
         try:
-            tokens.next()
-            raise SyntaxError('too more tokens: %r', tokens.cur)
+            tk = next(tokens)
+            raise SyntaxError('too more tokens: %r',
+                (src.name, tk.start[0], tk.start[1], tk.line))
         except StopIteration:
             pass
 
-        return tree
+        src.parse_tree = tree
+        return src
