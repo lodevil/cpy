@@ -391,8 +391,11 @@ class ASTBuilder(object):
             return self.handle_test(node[0])
         elif len(node) == 3:
             k = self.handle_test(node[0])
+            if not isinstance(k, ast.Name):
+                raise self.syntax_error(
+                    'keyword must be a NAME', *node[0].start)
             v = self.handle_test(node[2])
-            return ast.keyword(k, v)
+            return ast.keyword(k.id, v)
         return ast.GeneratorExp(self.handle_test(node[0]),
             self.get_comp_for(node[1]), *node.start)
 
@@ -478,9 +481,11 @@ class ASTBuilder(object):
             return self.get_testlist_comp('(', node[1])
         elif n.val == '[':
             if len(node) == 2:
-                return ast.List(None, ast.Load, *node.start)
+                return ast.List([], ast.Load, *node.start)
             return self.get_testlist_comp('[', node[1])
         else:
+            if len(node) == 2:
+                return ast.Dict([], [], *node.start)
             return self.handle_dictorsetmaker(node[1])
 
     def get_string(self, node):
@@ -956,7 +961,7 @@ class ASTBuilder(object):
             funccls = self.handle_classdef(node[1])
         decs, i = [], 0
         for n in node[0]:
-            name = self.get_attribute(node[1])
+            name = self.get_attribute(n[1])
             if n[2].val == '(':
                 if len(n) == 6:
                     args, keywords, starargs, kwargs = self.get_arglist(n[3])
@@ -971,10 +976,11 @@ class ASTBuilder(object):
 
     def get_attribute(self, node):
         # dotted_name: NAME ('.' NAME)*
+        first = ast.Name(node[0].val, ast.Load, *node.start)
         if len(node) == 1:
-            return ast.Name(node[0].val, ast.Load, *node.start)
-        attr = ast.Attribute(node[0].val, node[2].val, ast.Load, *node.start)
-        i = 3
+            return first
+        attr = ast.Attribute(first, node[2].val, ast.Load, *node.start)
+        i = 4
         while i < len(node):
             attr = ast.Attribute(attr, node[i].val, ast.Load, *node.start)
             i += 2
