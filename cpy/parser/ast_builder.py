@@ -3,6 +3,7 @@ from .pystates import symbols as syms
 from .grammar.sourcefile import SourceFile
 import token
 import six
+import re
 
 
 class ASTError(Exception):
@@ -60,6 +61,8 @@ compare_map = {
     'in': ast.In,
     'not in': ast.NotIn,
 }
+
+xdigits = re.compile(r'^[0-9a-z]{2}$', re.IGNORECASE)
 
 
 @six.add_metaclass(ASTMeta)
@@ -466,7 +469,7 @@ class ASTBuilder(object):
         elif n.val == '...':
             return ast.Ellipsis(*node.start)
         elif n == token.STRING:
-            return ast.Str(self.get_string(node.subs), *node.start)
+            return self.get_string(node)
         elif n.val == '(':
             if len(node) == 2:
                 return ast.Tuple(None, ast.Load, *node.start)
@@ -480,11 +483,103 @@ class ASTBuilder(object):
         else:
             return self.handle_dictorsetmaker(node[1])
 
-    def get_string(self, nodes):
-        strs = []
-        for n in nodes:
-            strs.append(n.val.strip(n.val[0]))
-        return ''.join(strs)
+    def get_string(self, node):
+        head = self.parse_string(node[0])
+        if len(node) == 1:
+            return head
+        t = type(head)
+        strs = [head]
+        for n in node.subs[1:]:
+            s = self.parse_string(n)
+            if not isinstance(s, t):
+                raise self.syntax_error(
+                    'cannot mix bytes and nonbytes literals', node)
+            strs.append(s)
+        if t is ast.Str:
+            return ast.Str(''.join(strs), *node.start)
+        return ast.Bytes(b''.join(strs), *node.start)
+
+    def parse_string(self, node):
+        is_str, is_re = True, False
+        s = node.val
+        
+        pos = 0
+        while True:
+            c = s[pos]
+            if c == 'b':
+                is_str = False
+            elif c == 'r':
+                is_re = True
+            elif c == 'u':
+                pass
+            else:
+                if s[pos] == s[pos + 1]:
+                    s = s[pos + 3:-3]
+                else:
+                    s = s[pos + 1:-1]
+                break
+            pos += 1
+        if is_re:
+            if is_str:
+                return ast.Str(s, *node.start)
+            return ast.Bytes(s, *node.start)
+        chars = []
+        pos = 0
+        while pos < len(s):
+            c = s[pos]
+            if c == '\\':
+                if pos == len(s) - 1:
+                    raise self.syntax_error(
+                        'EOL while scanning string literal', *node.end)
+                pos += 1
+                next = s[pos]
+                if next == "'":
+                    v = "'" if is_str else ord("'")
+                elif next == '"':
+                    v = '"' if is_str else ord('"')
+                elif next == 'b':
+                    v = '\b' if is_str else ord('\b')
+                elif next == 'f':
+                    v = '\f' if is_str else ord('\f')
+                elif next == 't':
+                    v = '\t' if is_str else ord('\t')
+                elif next == 'n':
+                    v = '\n' if is_str else ord('\n')
+                elif next == 'r':
+                    v = '\r' if is_str else ord('\r')
+                elif next == 'v':
+                    v = '\v' if is_str else ord('\v')
+                elif next == 'a':
+                    v = '\a' if is_str else ord('\a')
+                elif next == 'x':
+                    if pos + 2 >= len(s) - 1:
+                        raise self.syntax_error(
+                            'truncated \\xXX escape', node)
+                    xs = s[pos:pos + 2]
+                    if not xdigits.match(xs):
+                        raise self.syntax_error('invalid \\xXX escape', node)
+                    pos += 2
+                    n = eval('0x' + xs)
+                    v = chr(n) if is_str else n
+                elif next in '01234567':
+                    n = int(next)
+                    if pos + 1 < len(s) and s[pos + 1] in '01234567':
+                        pos += 1
+                        n = n * 8 + int(s[pos])
+                        if pos + 1 < len(s) and s[pos + 1] in '01234567':
+                            pos += 1
+                            n = n * 8 + int(s[pos])
+                    v = chr(n) if is_str else n
+                else:
+                    v = '\\' if is_str else ord('\\')
+                chars.append(v)
+            else:
+                chars.append(c)
+            pos += 1
+
+        if is_str:
+            return ast.Str(''.join(chars), *node.start)
+        return ast.Bytes(bytes(chars), *node.start)
 
     def handle_yield_expr(self, node):
         # yield_expr: 'yield' [yield_arg]
@@ -622,6 +717,7 @@ class ASTBuilder(object):
     def handle_del_stmt(self, node):
         # del_stmt: 'del' exprlist
         expr = self.handle_exprlist(node[1])
+        self.loop_mark_ctx(expr, ast.Del)
         if isinstance(expr, ast.Tuple):
             return ast.Delete(expr.elts, *node.start)
         return ast.Delete([expr], *node.start)
