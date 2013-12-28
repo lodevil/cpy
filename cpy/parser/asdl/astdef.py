@@ -42,7 +42,7 @@ class ASTNode(object):
                     'ctx not equal: %s %s' % (a.__name__, type(b).__name__))
                 return False
         else:
-            if a is Equal:
+            if a is Equal or b is Equal:
                 return True
             if isinstance(a, list):
                 if not isinstance(b, list):
