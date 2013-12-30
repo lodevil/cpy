@@ -341,7 +341,7 @@ class ASTBuilder(object):
             next = 2
         else:
             lower, next = None, 1
-        if len(node) > 2:
+        if next < len(node):
             upper, next = self.handle_test(node[next]), next + 1
             step = None
             if next < len(node):
@@ -475,7 +475,7 @@ class ASTBuilder(object):
             return self.get_string(node)
         elif n.val == '(':
             if len(node) == 2:
-                return ast.Tuple(None, ast.Load, *node.start)
+                return ast.Tuple([], ast.Load, *node.start)
             if node[1] == syms.yield_expr:
                 return self.handle_yield_expr(node[1])
             return self.get_testlist_comp('(', node[1])
@@ -749,7 +749,7 @@ class ASTBuilder(object):
         elif node == syms.continue_stmt:
             return ast.Continue(*node.start)
         elif node == syms.yield_stmt:
-            return self.handle_yield_expr(node[0])
+            return ast.Expr(self.handle_yield_expr(node[0]), *node.start)
         exc = len(node) > 1 and self.handle_test(node[1]) or None
         cause = len(node) == 4 and self.handle_test(node[3]) or None
         return ast.Raise(exc, cause, *node.start)

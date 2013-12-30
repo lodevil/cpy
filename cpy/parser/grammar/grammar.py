@@ -27,6 +27,7 @@ class Grammar(object):
                     if stack:
                         tree.up()
                     continue
+                print(tk)
                 raise SyntaxError('invalid grammar0',
                     (src.name, tk.start[0], tk.start[1], tk.line))
             arc = val_arcs.get(tk.string, None) or val_arcs.get(None, None)

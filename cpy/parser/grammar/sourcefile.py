@@ -40,7 +40,7 @@ class SourceFile(object):
         tk = next(self._gen)
         if tk.type == tokenize.ENCODING:
             self.encoding = tk.string
-        else:
+        elif tk.type not in (tokenize.NL, tokenize.COMMENT):
             yield tk
 
         while True:
