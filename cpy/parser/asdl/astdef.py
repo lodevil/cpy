@@ -135,7 +135,7 @@ class Attribute(object):
 class ASTDef(object):
     def __init__(self, asdlsrc):
         grammar = Grammar(symbols, states, 'asdl')
-        self.tree = grammar.parse(asdlsrc)
+        self.tree = grammar.parse(asdlsrc).parse_tree
         self.build()
 
     def generate(self):
@@ -149,7 +149,7 @@ class ASTDef(object):
         return buf.getvalue()
 
     def stmt_nodes(self):
-        for module in self.tree.entry.subs:
+        for module in self.tree.root.subs:
             if module.type == symbols.module and module.subs[1].val == 'Python':
                 break
         else:
